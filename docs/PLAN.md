@@ -1,6 +1,6 @@
 # OpenHands Mobile — planning notes
 
-Status: planning. No application code yet.  
+Status: Expo MVP in progress (direct host + session key, list + chat).  
 Last updated: 2026-09-16.
 
 This document is the working agreement for `openhands-mobile`. It records
@@ -284,4 +284,11 @@ Expo spike.
 3. Open a follow-up design in Agent Canvas for pairing + the remote-session
    facade.
 
-Until then, this repo should stay documentation-only.
+The Expo app now implements step 1, a fetch-based slice of step 2
+(typescript-client is not RN-safe: it depends on Node `ws` / `http`),
+step 3 (host + key only), and step 4 (list / create-best-effort / chat
+with REST then WS). Pairing, Cloud device flow, and the laptop facade
+are still future work.
+
+Sideload with `npm run android:device` or `npm run ios:device`. See the
+README.

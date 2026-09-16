@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "OpenHands",
+    "slug": "openhands-mobile",
+    "scheme": "openhands",
+    "version": "0.1.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0c0e12"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "dev.openhands.mobile",
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "OpenHands uses the local network to reach an Agent Server on your laptop or LAN.",
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      }
+    },
+    "android": {
+      "package": "dev.openhands.mobile",
+      "usesCleartextTraffic": true,
+      "adaptiveIcon": {
+        "backgroundColor": "#0c0e12",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-dev-client",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          },
+          "ios": {
+            "flipper": false
+          }
+        }
+      ]
+    ]
+  }
+}

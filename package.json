@@ -1,0 +1,39 @@
+{
+  "name": "@openhands/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "description": "Phone and tablet client for OpenHands",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OpenHands/openhands-mobile"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "android:device": "expo run:android --device",
+    "ios:device": "expo run:ios --device",
+    "prebuild": "expo prebuild",
+    "typecheck": "tsc --noEmit",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "expo": "~57.0.23",
+    "expo-build-properties": "~57.0.20",
+    "expo-dev-client": "~57.0.19",
+    "expo-secure-store": "~57.0.4",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3"
+  }
+}
