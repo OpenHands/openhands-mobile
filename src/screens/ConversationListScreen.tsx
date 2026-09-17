@@ -34,7 +34,17 @@ export function ConversationListScreen({
 }: {
   onOpenConversation?: () => void;
 }) {
-  const { connection, openChat, disconnect, route } = useAppState();
+  const {
+    connection,
+    openChat,
+    openCustomize,
+    openAutomations,
+    disconnect,
+    route,
+  } = useAppState();
+  const customizeActive = route.name === "customize";
+  const automationsActive =
+    route.name === "automations" || route.name === "automation";
   const [items, setItems] = React.useState<ConversationSummary[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
@@ -103,8 +113,24 @@ export function ConversationListScreen({
           onPress={() => void onCreate()}
           disabled={creating}
         />
-        <NavRow label="Customize" icon={<CubesIcon />} disabled />
-        <NavRow label="Automations" icon={<AutomationsIcon />} disabled />
+        <NavRow
+          label="Customize"
+          icon={<CubesIcon />}
+          active={customizeActive}
+          onPress={() => {
+            openCustomize("hub");
+            onOpenConversation?.();
+          }}
+        />
+        <NavRow
+          label="Automations"
+          icon={<AutomationsIcon />}
+          active={automationsActive}
+          onPress={() => {
+            openAutomations();
+            onOpenConversation?.();
+          }}
+        />
       </View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}

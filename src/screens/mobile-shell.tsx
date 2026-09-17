@@ -3,16 +3,14 @@ import {
   Animated,
   Pressable,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppState } from "../context/app-state";
-import { colors, layout, radius, textBase, typeScale } from "../theme";
-import { MenuButton } from "../ui/menu-button";
-import { ChatScreen } from "./ChatScreen";
+import { colors, layout, radius } from "../theme";
 import { ConversationListScreen } from "./ConversationListScreen";
+import { WorkspaceScreen } from "./workspace-screen";
 
 export function MobileShell() {
   const { route } = useAppState();
@@ -62,16 +60,7 @@ export function MobileShell() {
         ]}
       >
         <View style={styles.chatInner}>
-          {route.name === "chat" ? (
-            <ChatScreen
-              key={route.conversation.id}
-              conversation={route.conversation}
-              onToggleNav={toggleNav}
-              navOpen={navOpen}
-            />
-          ) : (
-            <EmptyChat navOpen={navOpen} onToggleNav={toggleNav} />
-          )}
+          <WorkspaceScreen onToggleNav={toggleNav} navOpen={navOpen} />
           {navOpen ? (
             <Pressable
               accessibilityLabel="Close menu"
@@ -85,29 +74,6 @@ export function MobileShell() {
         </View>
       </Animated.View>
     </View>
-  );
-}
-
-function EmptyChat({
-  navOpen,
-  onToggleNav,
-}: {
-  navOpen: boolean;
-  onToggleNav: () => void;
-}) {
-  return (
-    <SafeAreaView style={styles.emptySafe} edges={["top", "bottom"]}>
-      <View style={styles.emptyHeader}>
-        <MenuButton open={navOpen} onPress={onToggleNav} />
-        <View style={styles.emptyHeaderCopy} />
-      </View>
-      <View style={styles.emptyBody}>
-        <Text style={styles.emptyTitle}>Start a conversation</Text>
-        <Text style={styles.emptyCopy}>
-          Open the menu to pick a thread or start a new chat.
-        </Text>
-      </View>
-    </SafeAreaView>
   );
 }
 
@@ -142,35 +108,5 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 2,
-  },
-  emptySafe: { flex: 1, backgroundColor: colors.bg },
-  emptyHeader: {
-    minHeight: layout.headerRowHeight,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingLeft: layout.gutter,
-    paddingRight: 12,
-  },
-  emptyHeaderCopy: { flex: 1 },
-  emptyBody: {
-    flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: 36,
-    gap: 8,
-  },
-  emptyTitle: {
-    ...textBase,
-    color: colors.text,
-    fontSize: typeScale.brand,
-    lineHeight: 28,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  emptyCopy: {
-    ...textBase,
-    color: colors.muted,
-    fontSize: typeScale.title,
-    lineHeight: 24,
-    textAlign: "center",
   },
 });

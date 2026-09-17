@@ -9,12 +9,14 @@ export function NavRow({
   icon,
   onPress,
   disabled,
+  active,
   trailing,
 }: {
   label: string;
   icon: React.ReactNode;
   onPress?: () => void;
   disabled?: boolean;
+  active?: boolean;
   trailing?: React.ReactNode;
 }) {
   return (
@@ -23,10 +25,11 @@ export function NavRow({
       onPress={onPress}
       disabled={disabled || !onPress}
       accessibilityRole="button"
-      accessibilityState={{ disabled: Boolean(disabled) }}
+      accessibilityState={{ disabled: Boolean(disabled), selected: Boolean(active) }}
       accessibilityLabel={disabled ? `${label} (coming soon)` : label}
       style={(state) => [
         styles.row,
+        active && styles.active,
         !disabled && isPressHot(state) && styles.hot,
         disabled && styles.disabled,
       ]}
@@ -51,6 +54,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
+  },
+  active: {
+    backgroundColor: colors.surface,
   },
   hot: {
     backgroundColor: colors.surfaceRaised,

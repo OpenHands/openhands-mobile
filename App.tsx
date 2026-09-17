@@ -3,10 +3,10 @@ import React from "react";
 import { ActivityIndicator, StyleSheet, useWindowDimensions, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AppStateProvider, useAppState } from "./src/context/app-state";
-import { ChatScreen } from "./src/screens/ChatScreen";
 import { ConnectScreen } from "./src/screens/ConnectScreen";
 import { ConversationListScreen } from "./src/screens/ConversationListScreen";
 import { MobileShell } from "./src/screens/mobile-shell";
+import { WorkspaceScreen } from "./src/screens/workspace-screen";
 import { applyWebTheme, colors, layout, TABLET_MIN_WIDTH } from "./src/theme";
 
 function Shell() {
@@ -33,14 +33,7 @@ function Shell() {
           <ConversationListScreen />
         </View>
         <View style={styles.paneChat}>
-          {route.name === "chat" ? (
-            <ChatScreen
-              key={route.conversation.id}
-              conversation={route.conversation}
-            />
-          ) : (
-            <View style={styles.boot} />
-          )}
+          <WorkspaceScreen />
         </View>
       </View>
     );

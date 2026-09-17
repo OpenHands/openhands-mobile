@@ -5,14 +5,20 @@ import {
   AUTOMATIONS_ICON_SVG,
   BLOCK_DRAWER_SVG,
   BROWSER_TAB_SVG,
+  CHEVRON_LEFT_SVG,
+  CHEVRON_RIGHT_SVG,
   COMMITS_TAB_SVG,
   CUSTOMIZE_CUBES_SVG,
   FILES_TAB_SVG,
   LUCIDE_MENU_SVG,
   LUCIDE_PLUS_SVG,
   LUCIDE_SETTINGS_SVG,
+  MCP_ICON_SVG,
   OPENHANDS_LOGO_SVG,
   PLANNER_TAB_SVG,
+  PLAY_ICON_SVG,
+  PLUGINS_ICON_SVG,
+  SKILLS_ICON_SVG,
   TERMINAL_TAB_SVG,
   USAGE_TAB_SVG,
 } from "../assets/brand-svgs";
@@ -92,6 +98,30 @@ export function BrowserTabIcon({ color }: { color?: string }) {
 
 export function UsageTabIcon({ color }: { color?: string }) {
   return <CanvasIcon xml={USAGE_TAB_SVG} color={color} size={16} />;
+}
+
+export function SkillsIcon({ color }: { color?: string }) {
+  return <CanvasIcon xml={SKILLS_ICON_SVG} color={color} />;
+}
+
+export function McpIcon({ color }: { color?: string }) {
+  return <CanvasIcon xml={MCP_ICON_SVG} color={color} />;
+}
+
+export function PluginsIcon({ color }: { color?: string }) {
+  return <CanvasIcon xml={PLUGINS_ICON_SVG} color={color} />;
+}
+
+export function ChevronLeftIcon({ color = colors.text }: { color?: string }) {
+  return <CanvasIcon xml={CHEVRON_LEFT_SVG} color={color} size={20} />;
+}
+
+export function ChevronRightIcon({ color = colors.muted }: { color?: string }) {
+  return <CanvasIcon xml={CHEVRON_RIGHT_SVG} color={color} size={16} />;
+}
+
+export function PlayIcon({ color = colors.text }: { color?: string }) {
+  return <CanvasIcon xml={PLAY_ICON_SVG} color={color} size={16} />;
 }
 
 export function LogoMark() {

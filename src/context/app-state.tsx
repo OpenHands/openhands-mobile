@@ -6,11 +6,16 @@ import {
   getActiveConnection,
 } from "../storage/connection-store";
 
+export type CustomizeSection = "hub" | "skills" | "mcp" | "plugins";
+
 export type Route =
   | { name: "boot" }
   | { name: "connect" }
   | { name: "list" }
-  | { name: "chat"; conversation: ConversationSummary };
+  | { name: "chat"; conversation: ConversationSummary }
+  | { name: "customize"; section: CustomizeSection }
+  | { name: "automations" }
+  | { name: "automation"; id: string };
 
 interface AppStateValue {
   route: Route;
@@ -18,10 +23,21 @@ interface AppStateValue {
   setConnection: (connection: StoredConnection) => void;
   openList: () => void;
   openChat: (conversation: ConversationSummary) => void;
+  openCustomize: (section?: CustomizeSection) => void;
+  openAutomations: () => void;
+  openAutomation: (id: string) => void;
   disconnect: () => Promise<void>;
 }
 
 const AppStateContext = React.createContext<AppStateValue | null>(null);
+
+export function isCustomizeRoute(route: Route): boolean {
+  return route.name === "customize";
+}
+
+export function isAutomationsRoute(route: Route): boolean {
+  return route.name === "automations" || route.name === "automation";
+}
 
 export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [route, setRoute] = React.useState<Route>({ name: "boot" });
@@ -55,6 +71,9 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       },
       openList: () => setRoute({ name: "list" }),
       openChat: (conversation) => setRoute({ name: "chat", conversation }),
+      openCustomize: (section = "hub") => setRoute({ name: "customize", section }),
+      openAutomations: () => setRoute({ name: "automations" }),
+      openAutomation: (id) => setRoute({ name: "automation", id }),
       disconnect: async () => {
         await clearActiveConnection();
         setConnectionState(null);
