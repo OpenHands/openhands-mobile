@@ -21,8 +21,11 @@ import { mapEventToRows, type ChatRow } from "../chat/map-event";
 import { useAppState } from "../context/app-state";
 import { useConversationSocket } from "../hooks/useConversationSocket";
 import { colors, layout, space, textBase, typeScale } from "../theme";
+import { CanvasPanel } from "../ui/canvas-panel";
+import { DEFAULT_CANVAS_TAB, type CanvasTab } from "../ui/canvas-tabs";
 import { ChatBubble } from "../ui/chat-message";
 import { Composer } from "../ui/composer";
+import { DrawerButton } from "../ui/drawer-button";
 import { MenuButton } from "../ui/menu-button";
 import { StatusDot } from "../ui/status-dot";
 import { webChatProps, webScrollbarProps } from "../ui/web-scrollbar";
@@ -68,7 +71,18 @@ export function ChatScreen({
   const [error, setError] = React.useState<string | null>(null);
   const [historyReady, setHistoryReady] = React.useState(false);
   const [socketAnchor, setSocketAnchor] = React.useState<string | null>(null);
+  const [panelOpen, setPanelOpen] = React.useState(false);
+  const [canvasTab, setCanvasTab] = React.useState<CanvasTab>(DEFAULT_CANVAS_TAB);
   const listRef = React.useRef<FlatList<ChatRow>>(null);
+
+  React.useEffect(() => {
+    if (!panelOpen || Platform.OS !== "web") return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPanelOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [panelOpen]);
 
   React.useEffect(() => {
     if (!connection) return undefined;
@@ -222,40 +236,50 @@ export function ChatScreen({
               {conversation.title}
             </Text>
           </View>
+          <DrawerButton
+            open={panelOpen}
+            onPress={() => setPanelOpen((value) => !value)}
+          />
         </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <View style={styles.stage}>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        {loading ? (
-          <View style={styles.centered}>
-            <ActivityIndicator color={colors.accent} />
-          </View>
-        ) : (
-          <FlatList
-            ref={listRef}
-            data={rows}
-            keyExtractor={(item) => item.id}
-            {...webScrollbarProps}
-            style={styles.transcriptScroll}
-            contentContainerStyle={styles.transcript}
-            onContentSizeChange={() =>
-              listRef.current?.scrollToEnd({ animated: true })
-            }
-            ListEmptyComponent={
-              <Text style={styles.empty}>
-                No messages yet. Send one to continue this conversation.
-              </Text>
-            }
-            renderItem={({ item }) => <ChatBubble row={item} />}
+          {loading ? (
+            <View style={styles.centered}>
+              <ActivityIndicator color={colors.accent} />
+            </View>
+          ) : (
+            <FlatList
+              ref={listRef}
+              data={rows}
+              keyExtractor={(item) => item.id}
+              {...webScrollbarProps}
+              style={styles.transcriptScroll}
+              contentContainerStyle={styles.transcript}
+              onContentSizeChange={() =>
+                listRef.current?.scrollToEnd({ animated: true })
+              }
+              ListEmptyComponent={
+                <Text style={styles.empty}>
+                  No messages yet. Send one to continue this conversation.
+                </Text>
+              }
+              renderItem={({ item }) => <ChatBubble row={item} />}
+            />
+          )}
+
+          <Composer
+            value={draft}
+            onChangeText={setDraft}
+            onSubmit={() => void onSend()}
+            disabled={sending}
           />
-        )}
 
-        <Composer
-          value={draft}
-          onChangeText={setDraft}
-          onSubmit={() => void onSend()}
-          disabled={sending}
-        />
+          {panelOpen ? (
+            <CanvasPanel tab={canvasTab} onChangeTab={setCanvasTab} />
+          ) : null}
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -288,6 +312,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     fontWeight: "600",
   },
+  stage: { flex: 1, minHeight: 0 },
   error: {
     ...textBase,
     color: colors.danger,

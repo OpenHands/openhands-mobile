@@ -3,11 +3,18 @@ import { StyleSheet, View } from "react-native";
 import { SvgXml } from "react-native-svg";
 import {
   AUTOMATIONS_ICON_SVG,
+  BLOCK_DRAWER_SVG,
+  BROWSER_TAB_SVG,
+  COMMITS_TAB_SVG,
   CUSTOMIZE_CUBES_SVG,
+  FILES_TAB_SVG,
   LUCIDE_MENU_SVG,
   LUCIDE_PLUS_SVG,
   LUCIDE_SETTINGS_SVG,
   OPENHANDS_LOGO_SVG,
+  PLANNER_TAB_SVG,
+  TERMINAL_TAB_SVG,
+  USAGE_TAB_SVG,
 } from "../assets/brand-svgs";
 import { colors, layout } from "../theme";
 
@@ -55,6 +62,38 @@ export function MenuIcon({ color = colors.text }: { color?: string }) {
   return <CanvasIcon xml={LUCIDE_MENU_SVG} color={color} size={20} />;
 }
 
+export function DrawerIcon({ color = colors.text }: { color?: string }) {
+  return (
+    <View style={styles.flip}>
+      <CanvasIcon xml={BLOCK_DRAWER_SVG} color={color} size={20} />
+    </View>
+  );
+}
+
+export function FilesTabIcon({ color }: { color?: string }) {
+  return <CanvasIcon xml={FILES_TAB_SVG} color={color} size={16} />;
+}
+
+export function CommitsTabIcon({ color }: { color?: string }) {
+  return <CanvasIcon xml={COMMITS_TAB_SVG} color={color} size={16} />;
+}
+
+export function PlannerTabIcon({ color }: { color?: string }) {
+  return <CanvasIcon xml={PLANNER_TAB_SVG} color={color} size={16} />;
+}
+
+export function TerminalTabIcon({ color }: { color?: string }) {
+  return <CanvasIcon xml={TERMINAL_TAB_SVG} color={color} size={16} />;
+}
+
+export function BrowserTabIcon({ color }: { color?: string }) {
+  return <CanvasIcon xml={BROWSER_TAB_SVG} color={color} size={16} />;
+}
+
+export function UsageTabIcon({ color }: { color?: string }) {
+  return <CanvasIcon xml={USAGE_TAB_SVG} color={color} size={16} />;
+}
+
 export function LogoMark() {
   return (
     <SvgXml xml={OPENHANDS_LOGO_SVG} width={LOGO_WIDTH} height={LOGO_HEIGHT} />
@@ -69,4 +108,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexShrink: 0,
   },
+  flip: { transform: [{ scaleX: -1 }] },
 });
