@@ -1,5 +1,12 @@
 import React from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import {
   dispatchAutomation,
   listAutomations,
@@ -11,13 +18,27 @@ import {
 import { AgentServerError } from "../api/http";
 import { useAppState } from "../context/app-state";
 import { automationTriggerLabel } from "../customize/automation-labels";
-import { colors, radius, space, textBase, typeScale } from "../theme";
-import { PlayIcon } from "../ui/icons";
+import { launchAutomationChat } from "../customize/launch-automation-chat";
+import {
+  CREATE_AUTOMATION_PROMPT,
+  filterRecommendedAutomations,
+  type RecommendedAutomation,
+} from "../customize/recommended-automations";
+import { colors, layout, radius, space, textBase, typeScale } from "../theme";
+import { PlayIcon, PlusIcon } from "../ui/icons";
 import { ModuleCard } from "../ui/module-card";
 import { isPressHot, pressWebProps } from "../ui/press-style";
 import { SearchField } from "../ui/search-field";
+import { SegmentedControl } from "../ui/segmented-control";
 import { ToggleSwitch } from "../ui/toggle-switch";
 import { ScreenBody, screenScrollProps, screenStyles } from "./screen-body";
+
+type AutomationsTab = "dashboard" | "templates";
+
+const TABS: { id: AutomationsTab; label: string }[] = [
+  { id: "dashboard", label: "Dashboard" },
+  { id: "templates", label: "Templates" },
+];
 
 export function AutomationsScreen({
   onToggleNav,
@@ -26,7 +47,8 @@ export function AutomationsScreen({
   onToggleNav?: () => void;
   navOpen?: boolean;
 }) {
-  const { connection, openAutomation } = useAppState();
+  const { connection, openAutomation, openChat } = useAppState();
+  const [tab, setTab] = React.useState<AutomationsTab>("dashboard");
   const [health, setHealth] = React.useState<AutomationHealth | null>(null);
   const [items, setItems] = React.useState<AutomationSummary[]>([]);
   const [query, setQuery] = React.useState("");
@@ -34,10 +56,12 @@ export function AutomationsScreen({
   const [error, setError] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState<string | null>(null);
   const [running, setRunning] = React.useState<string | null>(null);
+  const [creating, setCreating] = React.useState(false);
 
   const load = React.useCallback(async () => {
     if (!connection) return;
     setError(null);
+    setLoading(true);
     try {
       const nextHealth = await resolveAutomationHealth(
         connection.host,
@@ -64,6 +88,10 @@ export function AutomationsScreen({
     void load();
   }, [load]);
 
+  React.useEffect(() => {
+    setQuery("");
+  }, [tab]);
+
   const visible = React.useMemo(() => {
     const needle = query.trim().toLowerCase();
     const filtered = needle
@@ -75,7 +103,31 @@ export function AutomationsScreen({
     });
   }, [items, query]);
 
+  const templates = React.useMemo(
+    () => filterRecommendedAutomations(query),
+    [query],
+  );
+
   const automationHost = health?.ok ? health.host : null;
+
+  const startChat = async (prompt: string) => {
+    if (!connection) return;
+    setCreating(true);
+    setError(null);
+    try {
+      openChat(
+        await launchAutomationChat(connection.host, connection.apiKey, prompt),
+      );
+    } catch (caught) {
+      setError(
+        caught instanceof AgentServerError
+          ? caught.message
+          : "Could not start that conversation.",
+      );
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const toggle = async (item: AutomationSummary, enabled: boolean) => {
     if (!connection || !automationHost) return;
@@ -128,44 +180,106 @@ export function AutomationsScreen({
     }
   };
 
-  const unavailable = health && !health.ok;
+  const unavailable = Boolean(health && !health.ok);
 
   return (
     <ScreenBody
       title="Automations"
       onToggleNav={onToggleNav}
       navOpen={navOpen}
-      loading={loading}
       error={error}
-    >
-      {unavailable ? (
-        <View style={screenStyles.content}>
-          <Text style={styles.unavailableTitle}>Automations unavailable</Text>
-          <Text style={screenStyles.empty}>
-            {health.reason === "agent-only"
-              ? "This device is talking to the agent server only. Start OpenHands with automations (npm run dev) or connect to the ingress host, usually port 8000."
-              : "The automations backend is not available right now. Check that the automation service is running on the laptop."}
+      trailing={
+        <Pressable
+          {...pressWebProps()}
+          onPress={() => void startChat(CREATE_AUTOMATION_PROMPT)}
+          disabled={creating}
+          accessibilityRole="button"
+          accessibilityLabel="Create an automation"
+          style={(state) => [
+            styles.create,
+            isPressHot(state) && styles.createHot,
+            creating && styles.createDisabled,
+          ]}
+        >
+          <PlusIcon color={colors.text} />
+          <Text style={styles.createLabel}>
+            {creating ? "Creating…" : "Create"}
           </Text>
-        </View>
-      ) : (
+        </Pressable>
+      }
+    >
+      <View style={styles.chrome}>
+        <SegmentedControl value={tab} options={TABS} onChange={setTab} />
+      </View>
+
+      {tab === "templates" ? (
         <FlatList
-          data={visible}
+          data={templates}
           keyExtractor={(item) => item.id}
           {...screenScrollProps}
           contentContainerStyle={screenStyles.content}
           ListHeaderComponent={
-            <SearchField
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search automations"
-            />
+            <View style={styles.headerBlock}>
+              <Text style={styles.pageTitle}>Templates</Text>
+              <Text style={screenStyles.hint}>
+                Browse proven automations and beta ideas, then launch one into a
+                conversation to tailor it to your work.
+              </Text>
+              <SearchField
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search templates"
+              />
+            </View>
           }
           ListEmptyComponent={
             <Text style={screenStyles.empty}>
-              {query.trim()
-                ? "No automations match that search."
-                : "No automations configured. Create them on the laptop — you can enable, disable, and run them here."}
+              No templates match that search.
             </Text>
+          }
+          renderItem={({ item }) => (
+            <TemplateCard
+              item={item}
+              disabled={creating}
+              onPress={() => void startChat(item.launchPrompt)}
+            />
+          )}
+        />
+      ) : (
+        <FlatList
+          data={unavailable || loading ? [] : visible}
+          keyExtractor={(item) => item.id}
+          {...screenScrollProps}
+          contentContainerStyle={screenStyles.content}
+          ListHeaderComponent={
+            <View style={styles.headerBlock}>
+              <Text style={styles.pageTitle}>Dashboard</Text>
+              <Text style={screenStyles.hint}>
+                Health, activity, and run performance across your automations.
+              </Text>
+              {!unavailable && !loading ? (
+                <SearchField
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Search automations"
+                />
+              ) : null}
+            </View>
+          }
+          ListEmptyComponent={
+            loading ? (
+              <View style={styles.centered}>
+                <ActivityIndicator color={colors.accent} />
+              </View>
+            ) : unavailable && health && !health.ok ? (
+              <UnavailableState reason={health.reason} onRetry={() => void load()} />
+            ) : (
+              <Text style={screenStyles.empty}>
+                {query.trim()
+                  ? "No automations match that search."
+                  : "No automations yet. Create one or launch a template."}
+              </Text>
+            )
           }
           renderItem={({ item }) => (
             <ModuleCard
@@ -184,7 +298,8 @@ export function AutomationsScreen({
                     style={(state) => [
                       styles.run,
                       isPressHot(state) && styles.runHot,
-                      (running === item.id || !item.enabled) && styles.runDisabled,
+                      (running === item.id || !item.enabled) &&
+                        styles.runDisabled,
                     ]}
                   >
                     <PlayIcon />
@@ -205,14 +320,88 @@ export function AutomationsScreen({
   );
 }
 
+function TemplateCard({
+  item,
+  disabled,
+  onPress,
+}: {
+  item: RecommendedAutomation;
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <ModuleCard
+      title={item.name}
+      subtitle={item.description}
+      pill={item.featured ? "Featured" : item.category}
+      onPress={disabled ? undefined : onPress}
+    />
+  );
+}
+
+function UnavailableState({
+  reason,
+  onRetry,
+}: {
+  reason: "unavailable" | "agent-only";
+  onRetry: () => void;
+}) {
+  return (
+    <View style={styles.unavailable}>
+      <Text style={styles.unavailableTitle}>Automations Unavailable</Text>
+      <Text style={screenStyles.empty}>
+        {reason === "agent-only"
+          ? "This device is talking to the agent server only. Start OpenHands with automations (npm run dev) or connect to the ingress host, usually port 8000."
+          : "The automations backend is not available right now. Please try again later or check that the automation service is running."}
+      </Text>
+      <Pressable
+        {...pressWebProps()}
+        onPress={onRetry}
+        accessibilityRole="button"
+        accessibilityLabel="Retry"
+        style={(state) => [styles.retry, isPressHot(state) && styles.retryHot]}
+      >
+        <Text style={styles.retryLabel}>Retry</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  unavailableTitle: {
+  chrome: {
+    paddingHorizontal: layout.gutter,
+    paddingBottom: space.md,
+  },
+  headerBlock: {
+    gap: space.md,
+  },
+  pageTitle: {
     ...textBase,
     color: colors.text,
     fontSize: typeScale.brand,
     lineHeight: 28,
     fontWeight: "600",
-    paddingTop: space.sm,
+  },
+  create: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    minHeight: 36,
+    paddingHorizontal: 10,
+    borderRadius: radius.sm,
+  },
+  createHot: {
+    backgroundColor: colors.tertiary,
+  },
+  createDisabled: {
+    opacity: 0.45,
+  },
+  createLabel: {
+    ...textBase,
+    color: colors.text,
+    fontSize: typeScale.meta,
+    lineHeight: 18,
+    fontWeight: "600",
   },
   actions: {
     flexDirection: "row",
@@ -231,5 +420,40 @@ const styles = StyleSheet.create({
   },
   runDisabled: {
     opacity: 0.35,
+  },
+  centered: {
+    paddingVertical: space.xxl,
+    alignItems: "center",
+  },
+  unavailable: {
+    gap: space.md,
+    paddingTop: space.sm,
+  },
+  unavailableTitle: {
+    ...textBase,
+    color: colors.text,
+    fontSize: typeScale.brand,
+    lineHeight: 28,
+    fontWeight: "600",
+  },
+  retry: {
+    alignSelf: "flex-start",
+    minHeight: 36,
+    paddingHorizontal: space.lg,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  retryHot: {
+    backgroundColor: colors.tertiary,
+  },
+  retryLabel: {
+    ...textBase,
+    color: colors.text,
+    fontSize: typeScale.meta,
+    lineHeight: 18,
+    fontWeight: "600",
   },
 });
