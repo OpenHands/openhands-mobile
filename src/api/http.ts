@@ -77,27 +77,43 @@ async function readErrorMessage(response: Response): Promise<string> {
   return text.slice(0, 280);
 }
 
+const REQUEST_TIMEOUT_MS = 20_000;
+
 export async function request<T>(
   host: string,
   apiKey: string,
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const url = `${normalizeHost(host)}${path}`;
+  const base = normalizeHost(host);
+  const url = `${base}${path}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const onAbort = () => controller.abort();
+  init.signal?.addEventListener("abort", onAbort);
   let response: Response;
   try {
     response = await fetch(url, {
       ...init,
+      signal: controller.signal,
       headers: {
         ...headers(apiKey),
         ...(init.headers ?? {}),
       },
     });
   } catch (error) {
+    if (controller.signal.aborted && init.signal?.aborted !== true) {
+      throw new AgentServerError(
+        `Timed out reaching ${base}. Scan the internet pairing QR from Settings → Mobile, or enter a host this phone can open.`,
+      );
+    }
     const message = error instanceof Error ? error.message : "Network request failed";
     throw new AgentServerError(
       `${message}. Check the host, that OpenHands is running, and that this device can reach it.`,
     );
+  } finally {
+    clearTimeout(timeout);
+    init.signal?.removeEventListener("abort", onAbort);
   }
 
   if (!response.ok) {

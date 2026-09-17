@@ -15,14 +15,38 @@ import { useAppState } from "../context/app-state";
 import { saveConnection } from "../storage/connection-store";
 import { colors, radius, space, textBase } from "../theme";
 import { isPressHot, pressWebProps } from "../ui/press-style";
+import {
+  isPhotoCanceled,
+  takePairingQrPhoto,
+} from "../pairing/take-pairing-photo";
+import { ScanPairingQr } from "./ScanPairingQr";
 
 export function ConnectScreen() {
-  const { setConnection } = useAppState();
+  const { setConnection, pairingError } = useAppState();
   const [name, setName] = React.useState("Laptop");
   const [host, setHost] = React.useState("http://");
   const [apiKey, setApiKey] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const [scanning, setScanning] = React.useState(false);
+
+  const onTakePhoto = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      setConnection(await takePairingQrPhoto());
+    } catch (caught) {
+      if (!isPhotoCanceled(caught)) {
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Could not read a pairing QR code from that photo.",
+        );
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const onConnect = async () => {
     setError(null);
@@ -51,6 +75,18 @@ export function ConnectScreen() {
     }
   };
 
+  if (scanning && Platform.OS !== "web") {
+    return (
+      <ScanPairingQr
+        onConnected={(connection) => {
+          setScanning(false);
+          setConnection(connection);
+        }}
+        onCancel={() => setScanning(false)}
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <KeyboardAvoidingView
@@ -61,11 +97,45 @@ export function ConnectScreen() {
           <Text style={styles.kicker}>OpenHands Mobile</Text>
           <Text style={styles.title}>Connect to a running agent server</Text>
           <Text style={styles.copy}>
-            This talks to the OpenHands already running on your laptop or a
-            remote host. Same Wi-Fi, Tailscale, or a tunnel all work. Use the
-            host and session API key from that machine — not an LLM provider
-            key.
+            Photograph the pairing QR from Agent Canvas Settings → Mobile.
+            You can still type a host and session API key if you prefer.
           </Text>
+
+          {Platform.OS !== "web" ? (
+            <>
+              <Pressable
+                {...pressWebProps("accent")}
+                onPress={() => void onTakePhoto()}
+                disabled={busy}
+                style={(state) => [
+                  styles.button,
+                  !busy && isPressHot(state) && styles.buttonHot,
+                  busy && styles.buttonDisabled,
+                ]}
+              >
+                {busy ? (
+                  <ActivityIndicator color={colors.accentForeground} />
+                ) : (
+                  <Text style={styles.buttonText}>Take photo of QR</Text>
+                )}
+              </Pressable>
+              <Pressable
+                {...pressWebProps("surface")}
+                onPress={() => {
+                  setError(null);
+                  setScanning(true);
+                }}
+                disabled={busy}
+                style={(state) => [
+                  styles.secondary,
+                  !busy && isPressHot(state) && styles.buttonHot,
+                  busy && styles.buttonDisabled,
+                ]}
+              >
+                <Text style={styles.secondaryText}>Open camera scanner</Text>
+              </Pressable>
+            </>
+          ) : null}
 
           <Text style={styles.label}>Name</Text>
           <TextInput
@@ -101,22 +171,34 @@ export function ConnectScreen() {
             secureTextEntry
           />
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {pairingError || error ? (
+            <Text style={styles.error}>{pairingError ?? error}</Text>
+          ) : null}
 
           <Pressable
-            {...pressWebProps("accent")}
+            {...pressWebProps(Platform.OS === "web" ? "accent" : "surface")}
             onPress={() => void onConnect()}
             disabled={busy}
             style={(state) => [
-              styles.button,
+              Platform.OS === "web" ? styles.button : styles.secondary,
               !busy && isPressHot(state) && styles.buttonHot,
               busy && styles.buttonDisabled,
             ]}
           >
             {busy ? (
-              <ActivityIndicator color={colors.accentForeground} />
+              <ActivityIndicator
+                color={
+                  Platform.OS === "web" ? colors.accentForeground : colors.text
+                }
+              />
             ) : (
-              <Text style={styles.buttonText}>Connect</Text>
+              <Text
+                style={
+                  Platform.OS === "web" ? styles.buttonText : styles.secondaryText
+                }
+              >
+                Connect
+              </Text>
             )}
           </Pressable>
         </View>
@@ -158,8 +240,18 @@ const styles = StyleSheet.create({
   },
   error: { ...textBase, color: colors.danger, fontSize: 14, marginTop: space.xs },
   button: {
-    marginTop: space.md,
+    marginTop: space.xs,
     backgroundColor: colors.accent,
+    borderRadius: radius.md,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  secondary: {
+    marginTop: space.md,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderWidth: 1,
     borderRadius: radius.md,
     minHeight: 48,
     alignItems: "center",
@@ -170,6 +262,12 @@ const styles = StyleSheet.create({
   buttonText: {
     ...textBase,
     color: colors.accentForeground,
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  secondaryText: {
+    ...textBase,
+    color: colors.text,
     fontSize: 16,
     fontWeight: "600",
   },

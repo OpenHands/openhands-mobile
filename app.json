@@ -17,6 +17,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "dev.openhands.mobile",
       "infoPlist": {
+        "NSCameraUsageDescription": "OpenHands uses the camera to photograph a pairing QR code from Agent Canvas.",
+        "NSPhotoLibraryUsageDescription": "OpenHands can read a pairing QR code from a photo you choose.",
         "NSLocalNetworkUsageDescription": "OpenHands uses the local network to reach an Agent Server on your laptop or LAN.",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
@@ -35,6 +37,19 @@
       "predictiveBackGestureEnabled": false
     },
     "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "OpenHands uses the camera to photograph a pairing QR code from Agent Canvas."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "OpenHands uses the camera to photograph a pairing QR code from Agent Canvas.",
+          "photosPermission": "OpenHands can read a pairing QR code from a photo you choose."
+        }
+      ],
       "expo-secure-store",
       "expo-dev-client",
       [

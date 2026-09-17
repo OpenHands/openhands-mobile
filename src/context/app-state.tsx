@@ -1,5 +1,11 @@
 import React from "react";
+import { Linking } from "react-native";
 import type { ConversationSummary } from "../api/types";
+import {
+  connectionFromConnectUrl,
+  payloadFromConnectUrl,
+  useMobileConnectLink,
+} from "../pairing/use-mobile-connect-link";
 import type { StoredConnection } from "../storage/connection-store";
 import {
   clearActiveConnection,
@@ -20,6 +26,7 @@ export type Route =
 interface AppStateValue {
   route: Route;
   connection: StoredConnection | null;
+  pairingError: string | null;
   setConnection: (connection: StoredConnection) => void;
   openList: () => void;
   openChat: (conversation: ConversationSummary) => void;
@@ -43,10 +50,35 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [route, setRoute] = React.useState<Route>({ name: "boot" });
   const [connection, setConnectionState] =
     React.useState<StoredConnection | null>(null);
+  const [pairingError, setPairingError] = React.useState<string | null>(null);
+
+  const setConnection = React.useCallback((next: StoredConnection) => {
+    setPairingError(null);
+    setConnectionState(next);
+    setRoute({ name: "list" });
+  }, []);
 
   React.useEffect(() => {
     let cancelled = false;
     void (async () => {
+      const initialUrl = await Linking.getInitialURL();
+      if (payloadFromConnectUrl(initialUrl)) {
+        try {
+          const paired = await connectionFromConnectUrl(initialUrl);
+          if (!cancelled && paired) {
+            setConnection(paired);
+            return;
+          }
+        } catch (caught: unknown) {
+          if (!cancelled) {
+            setPairingError(
+              caught instanceof Error
+                ? caught.message
+                : "Could not connect from that QR code.",
+            );
+          }
+        }
+      }
       const stored = await getActiveConnection();
       if (cancelled) return;
       if (stored) {
@@ -59,19 +91,20 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [setConnection]);
+
+  useMobileConnectLink(setConnection, setPairingError);
 
   const value = React.useMemo<AppStateValue>(
     () => ({
       route,
       connection,
-      setConnection: (next) => {
-        setConnectionState(next);
-        setRoute({ name: "list" });
-      },
+      pairingError,
+      setConnection,
       openList: () => setRoute({ name: "list" }),
       openChat: (conversation) => setRoute({ name: "chat", conversation }),
-      openCustomize: (section = "hub") => setRoute({ name: "customize", section }),
+      openCustomize: (section = "hub") =>
+        setRoute({ name: "customize", section }),
       openAutomations: () => setRoute({ name: "automations" }),
       openAutomation: (id) => setRoute({ name: "automation", id }),
       disconnect: async () => {
@@ -80,7 +113,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         setRoute({ name: "connect" });
       },
     }),
-    [connection, route],
+    [connection, pairingError, route, setConnection],
   );
 
   return (
