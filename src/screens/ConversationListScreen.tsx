@@ -16,22 +16,31 @@ import {
 } from "../api/agent-server";
 import type { ConversationSummary } from "../api/types";
 import { useAppState } from "../context/app-state";
-import { colors, radius, space } from "../theme";
+import { colors, layout, radius, space, textBase, typeScale } from "../theme";
+import { ConversationRow } from "../ui/conversation-row";
+import {
+  AutomationsIcon,
+  CubesIcon,
+  LogoMark,
+  PlusIcon,
+  SettingsIcon,
+} from "../ui/icons";
+import { NavRow } from "../ui/nav-row";
+import { ProfileMenu } from "../ui/profile-menu";
+import { webScrollbarProps, webSidebarProps } from "../ui/web-scrollbar";
 
-function formatWhen(value: string): string {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
-}
-
-export function ConversationListScreen() {
-  const { connection, openChat, disconnect } = useAppState();
+export function ConversationListScreen({
+  onOpenConversation,
+}: {
+  onOpenConversation?: () => void;
+}) {
+  const { connection, openChat, disconnect, route } = useAppState();
   const [items, setItems] = React.useState<ConversationSummary[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const activeId = route.name === "chat" ? route.conversation.id : null;
 
   const load = React.useCallback(async () => {
     if (!connection) return;
@@ -68,10 +77,11 @@ export function ConversationListScreen() {
         updatedAt: new Date().toISOString(),
         executionStatus: null,
       });
+      onOpenConversation?.();
     } catch (caught) {
       setError(
         caught instanceof AgentServerError
-          ? `${caught.message} Start a thread on the laptop if create is not supported yet.`
+          ? caught.message
           : "Could not create a conversation.",
       );
     } finally {
@@ -80,21 +90,28 @@ export function ConversationListScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+    <SafeAreaView style={styles.safe} edges={["top", "bottom"]} {...webSidebarProps}>
       <View style={styles.header}>
-        <View style={styles.headerText}>
-          <Text style={styles.kicker}>{connection?.name ?? "OpenHands"}</Text>
-          <Text style={styles.title}>Conversations</Text>
-          <Text style={styles.host} numberOfLines={1}>
-            {connection?.host}
-          </Text>
-        </View>
-        <Pressable onPress={() => void disconnect()} style={styles.linkButton}>
-          <Text style={styles.link}>Switch</Text>
-        </Pressable>
+        <LogoMark />
+        <Text style={styles.wordmark}>OpenHands</Text>
+      </View>
+
+      <View style={styles.nav}>
+        <NavRow
+          label={creating ? "Creating…" : "New Chat"}
+          icon={<PlusIcon />}
+          onPress={() => void onCreate()}
+          disabled={creating}
+        />
+        <NavRow label="Customize" icon={<CubesIcon />} disabled />
+        <NavRow label="Automations" icon={<AutomationsIcon />} disabled />
       </View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      <View style={styles.conversationsHeader}>
+        <Text style={styles.conversationsTitle}>Conversations</Text>
+      </View>
 
       {loading ? (
         <View style={styles.centered}>
@@ -104,6 +121,8 @@ export function ConversationListScreen() {
         <FlatList
           data={items}
           keyExtractor={(item) => item.id}
+          {...webScrollbarProps}
+          style={styles.listScroll}
           contentContainerStyle={
             items.length === 0 ? styles.emptyContainer : styles.list
           }
@@ -119,88 +138,123 @@ export function ConversationListScreen() {
           }
           ListEmptyComponent={
             <Text style={styles.empty}>
-              No conversations yet. Start one on the laptop, or try New chat.
+              No conversations yet. Start one on the laptop, or try New Chat.
             </Text>
           }
           renderItem={({ item }) => (
-            <Pressable
-              onPress={() => openChat(item)}
-              style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-            >
-              <Text style={styles.cardTitle} numberOfLines={2}>
-                {item.title}
-              </Text>
-              <Text style={styles.cardMeta}>
-                {item.executionStatus ?? "idle"} · {formatWhen(item.updatedAt)}
-              </Text>
-            </Pressable>
+            <ConversationRow
+              item={item}
+              active={item.id === activeId}
+              onPress={() => {
+                openChat(item);
+                onOpenConversation?.();
+              }}
+            />
           )}
         />
       )}
 
-      <Pressable
-        onPress={() => void onCreate()}
-        disabled={creating}
-        style={({ pressed }) => [
-          styles.fab,
-          pressed && styles.cardPressed,
-          creating && styles.disabled,
-        ]}
-      >
-        <Text style={styles.fabText}>{creating ? "Creating…" : "New chat"}</Text>
-      </Pressable>
+      <View style={styles.footer}>
+        <View style={styles.profileRow}>
+          <View style={styles.profileGrow}>
+            <ProfileMenu
+              name={connection?.name ?? "Laptop"}
+              host={connection?.host}
+              onSwitch={() => void disconnect()}
+            />
+          </View>
+          <Pressable
+            disabled
+            accessibilityRole="button"
+            accessibilityState={{ disabled: true }}
+            accessibilityLabel="Settings (coming soon)"
+            style={styles.settingsGear}
+          >
+            <SettingsIcon />
+          </Pressable>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: {
+    flex: 1,
+    backgroundColor: colors.bg,
+    paddingHorizontal: layout.navInset,
+  },
   header: {
-    paddingHorizontal: space.lg,
+    minHeight: layout.headerRowHeight,
+    paddingHorizontal: space.md,
+    paddingTop: space.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  wordmark: {
+    ...textBase,
+    color: colors.text,
+    fontSize: typeScale.brand,
+    lineHeight: 28,
+    fontWeight: "600",
+  },
+  nav: {
     paddingTop: space.sm,
     paddingBottom: space.md,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: space.md,
+    gap: 2,
   },
-  headerText: { flex: 1, gap: 4 },
-  kicker: { color: colors.accent, fontSize: 13, fontWeight: "600" },
-  title: { color: colors.text, fontSize: 28, fontWeight: "700" },
-  host: { color: colors.muted, fontSize: 13 },
-  linkButton: { paddingVertical: 8 },
-  link: { color: colors.accent, fontSize: 16, fontWeight: "600" },
-  error: {
-    color: colors.danger,
-    paddingHorizontal: space.lg,
-    marginBottom: space.sm,
-  },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
-  list: { paddingHorizontal: space.lg, paddingBottom: 96, gap: space.sm },
-  emptyContainer: { flexGrow: 1, padding: space.lg },
-  empty: { color: colors.muted, fontSize: 15, lineHeight: 22 },
-  card: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    padding: space.md,
-    gap: 6,
-  },
-  cardPressed: { opacity: 0.8 },
-  cardTitle: { color: colors.text, fontSize: 17, fontWeight: "600" },
-  cardMeta: { color: colors.muted, fontSize: 13 },
-  fab: {
-    position: "absolute",
-    right: space.lg,
-    bottom: space.lg,
-    backgroundColor: colors.accent,
-    borderRadius: 999,
-    paddingHorizontal: space.lg,
-    minHeight: 48,
-    alignItems: "center",
+  conversationsHeader: {
+    minHeight: 40,
+    paddingHorizontal: space.md,
+    paddingTop: space.md,
+    paddingBottom: space.sm,
     justifyContent: "center",
   },
-  fabText: { color: colors.bg, fontWeight: "700", fontSize: 16 },
-  disabled: { opacity: 0.6 },
+  conversationsTitle: {
+    ...textBase,
+    color: colors.muted,
+    fontSize: typeScale.meta,
+    lineHeight: 18,
+    fontWeight: "500",
+  },
+  error: {
+    ...textBase,
+    color: colors.danger,
+    paddingHorizontal: space.md,
+    marginBottom: space.sm,
+    fontSize: typeScale.meta,
+    lineHeight: 18,
+  },
+  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
+  listScroll: { flex: 1, minHeight: 0 },
+  list: {
+    paddingBottom: space.xxl,
+  },
+  emptyContainer: { flexGrow: 1, padding: space.md },
+  empty: {
+    ...textBase,
+    color: colors.muted,
+    fontSize: typeScale.title,
+    lineHeight: 24,
+  },
+  footer: {
+    paddingTop: space.md,
+    paddingHorizontal: space.xs,
+    paddingBottom: space.md,
+  },
+  profileRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  profileGrow: { flex: 1, minWidth: 0 },
+  settingsGear: {
+    width: layout.tap,
+    height: layout.tap,
+    borderRadius: radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    opacity: 0.4,
+  },
 });

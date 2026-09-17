@@ -1,9 +1,24 @@
+import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import { createId } from "../lib/uuid";
 import { normalizeHost } from "../api/agent-server";
 
 const CONNECTIONS_KEY = "openhands.connections.v1";
 const ACTIVE_ID_KEY = "openhands.active-connection-id";
+
+const webStore = {
+  async getItemAsync(key: string): Promise<string | null> {
+    return globalThis.localStorage?.getItem(key) ?? null;
+  },
+  async setItemAsync(key: string, value: string): Promise<void> {
+    globalThis.localStorage?.setItem(key, value);
+  },
+  async deleteItemAsync(key: string): Promise<void> {
+    globalThis.localStorage?.removeItem(key);
+  },
+};
+
+const store = Platform.OS === "web" ? webStore : SecureStore;
 
 export interface StoredConnection {
   id: string;
@@ -19,7 +34,7 @@ export interface ConnectionDraft {
 }
 
 async function readJson<T>(key: string, fallback: T): Promise<T> {
-  const raw = await SecureStore.getItemAsync(key);
+  const raw = await store.getItemAsync(key);
   if (!raw) return fallback;
   try {
     return JSON.parse(raw) as T;
@@ -36,7 +51,7 @@ export async function listConnections(): Promise<StoredConnection[]> {
 export async function getActiveConnection(): Promise<StoredConnection | null> {
   const [connections, activeId] = await Promise.all([
     listConnections(),
-    SecureStore.getItemAsync(ACTIVE_ID_KEY),
+    store.getItemAsync(ACTIVE_ID_KEY),
   ]);
   if (activeId) {
     const match = connections.find((item) => item.id === activeId);
@@ -59,26 +74,26 @@ export async function saveConnection(
   const next = existingId
     ? connections.map((item) => (item.id === existingId ? connection : item))
     : [...connections.filter((item) => item.host !== connection.host), connection];
-  await SecureStore.setItemAsync(CONNECTIONS_KEY, JSON.stringify(next));
-  await SecureStore.setItemAsync(ACTIVE_ID_KEY, connection.id);
+  await store.setItemAsync(CONNECTIONS_KEY, JSON.stringify(next));
+  await store.setItemAsync(ACTIVE_ID_KEY, connection.id);
   return connection;
 }
 
 export async function setActiveConnectionId(id: string): Promise<void> {
-  await SecureStore.setItemAsync(ACTIVE_ID_KEY, id);
+  await store.setItemAsync(ACTIVE_ID_KEY, id);
 }
 
 export async function clearActiveConnection(): Promise<void> {
-  await SecureStore.deleteItemAsync(ACTIVE_ID_KEY);
+  await store.deleteItemAsync(ACTIVE_ID_KEY);
 }
 
 export async function removeConnection(id: string): Promise<void> {
   const connections = await listConnections();
   const next = connections.filter((item) => item.id !== id);
-  await SecureStore.setItemAsync(CONNECTIONS_KEY, JSON.stringify(next));
-  const activeId = await SecureStore.getItemAsync(ACTIVE_ID_KEY);
+  await store.setItemAsync(CONNECTIONS_KEY, JSON.stringify(next));
+  const activeId = await store.getItemAsync(ACTIVE_ID_KEY);
   if (activeId === id) {
-    if (next[0]) await SecureStore.setItemAsync(ACTIVE_ID_KEY, next[0].id);
-    else await SecureStore.deleteItemAsync(ACTIVE_ID_KEY);
+    if (next[0]) await store.setItemAsync(ACTIVE_ID_KEY, next[0].id);
+    else await store.deleteItemAsync(ACTIVE_ID_KEY);
   }
 }

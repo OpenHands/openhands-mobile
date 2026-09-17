@@ -71,14 +71,33 @@ function headers(apiKey: string): Record<string, string> {
   };
 }
 
+function formatApiDetail(detail: unknown): string {
+  if (typeof detail === "string" && detail.trim()) return detail.trim();
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((item) => {
+        if (typeof item === "string") return item.trim();
+        if (isRecord(item) && typeof item.msg === "string") {
+          return item.msg.replace(/^Value error,\s*/i, "").trim();
+        }
+        return "";
+      })
+      .filter(Boolean);
+    if (parts.length) return parts.join(" ");
+  }
+  return "";
+}
+
 async function readErrorMessage(response: Response): Promise<string> {
   const text = await response.text();
   if (!text) return `${response.status} ${response.statusText}`;
   try {
     const parsed: unknown = JSON.parse(text);
     if (isRecord(parsed)) {
-      const detail = parsed.detail ?? parsed.message ?? parsed.error;
-      if (typeof detail === "string" && detail.trim()) return detail;
+      const detail = formatApiDetail(
+        parsed.detail ?? parsed.message ?? parsed.error,
+      );
+      if (detail) return detail;
     }
   } catch {
     // Use the raw body when the server did not return JSON.
@@ -184,6 +203,46 @@ export async function searchConversations(
   };
 }
 
+const DEFAULT_WORKING_DIR = "workspace/project";
+
+async function getActiveAgentProfileId(
+  host: string,
+  apiKey: string,
+): Promise<string | null> {
+  try {
+    const data = await request<Record<string, unknown>>(
+      host,
+      apiKey,
+      "/api/agent-profiles",
+    );
+    return typeof data.active_agent_profile_id === "string" &&
+      data.active_agent_profile_id.trim()
+      ? data.active_agent_profile_id
+      : null;
+  } catch (error) {
+    if (error instanceof AgentServerError && error.status === 401) throw error;
+    return null;
+  }
+}
+
+async function getEncryptedAgentSettings(
+  host: string,
+  apiKey: string,
+): Promise<Record<string, unknown> | null> {
+  try {
+    const data = await request<Record<string, unknown>>(
+      host,
+      apiKey,
+      "/api/settings",
+      { headers: { "X-Expose-Secrets": "encrypted" } },
+    );
+    return isRecord(data.agent_settings) ? data.agent_settings : null;
+  } catch (error) {
+    if (error instanceof AgentServerError && error.status === 401) throw error;
+    return null;
+  }
+}
+
 export async function createConversation(
   host: string,
   apiKey: string,
@@ -192,12 +251,29 @@ export async function createConversation(
   const payload: Record<string, unknown> = {
     max_iterations: 500,
     stuck_detection: true,
-    workspace: { working_dir: "workspace/project" },
+    workspace: { working_dir: DEFAULT_WORKING_DIR },
   };
+
+  // Inherit the laptop's active agent. The server requires one of
+  // `agent`, `agent_settings`, or `agent_profile_id`.
+  const profileId = await getActiveAgentProfileId(host, apiKey);
+  if (profileId) {
+    payload.agent_profile_id = profileId;
+  } else {
+    const agentSettings = await getEncryptedAgentSettings(host, apiKey);
+    if (!agentSettings) {
+      throw new AgentServerError(
+        "This OpenHands has no active agent profile. Start a chat on the laptop once, then try again.",
+      );
+    }
+    payload.agent_settings = agentSettings;
+  }
+
   if (initialText?.trim()) {
     payload.initial_message = {
       role: "user",
       content: [{ type: "text", text: initialText.trim() }],
+      run: true,
     };
   }
 
@@ -247,15 +323,18 @@ export async function sendMessage(
   conversationId: string,
   text: string,
 ): Promise<void> {
+  // `run` must be in the JSON body. `?run=true` is stored and ignored —
+  // the conversation stays idle and no assistant reply is produced.
   await request(
     host,
     apiKey,
-    `/api/conversations/${conversationId}/events?run=true`,
+    `/api/conversations/${conversationId}/events`,
     {
       method: "POST",
       body: JSON.stringify({
         role: "user",
         content: [{ type: "text", text }],
+        run: true,
       }),
     },
   );
@@ -299,6 +378,12 @@ export function isAgentEvent(value: unknown): value is AgentEvent {
   );
 }
 
+export function parseSocketEvent(value: unknown): AgentEvent | null {
+  if (isAgentEvent(value)) return value;
+  if (isRecord(value) && isAgentEvent(value.event)) return value.event;
+  return null;
+}
+
 function textFromContent(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
@@ -312,6 +397,7 @@ function textFromContent(content: unknown): string {
 
 export function eventText(event: AgentEvent): string {
   if (event.llm_message) return textFromContent(event.llm_message.content);
+  if (typeof event.delta === "string") return event.delta;
   if (typeof event.content === "string") return event.content;
   if (Array.isArray(event.thought)) {
     return event.thought

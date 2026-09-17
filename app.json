@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0c0e12"
+      "backgroundColor": "#181818"
     },
     "ios": {
       "supportsTablet": true,
@@ -27,7 +27,7 @@
       "package": "dev.openhands.mobile",
       "usesCleartextTraffic": true,
       "adaptiveIcon": {
-        "backgroundColor": "#0c0e12",
+        "backgroundColor": "#181818",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"

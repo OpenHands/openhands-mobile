@@ -6,10 +6,11 @@ import { AppStateProvider, useAppState } from "./src/context/app-state";
 import { ChatScreen } from "./src/screens/ChatScreen";
 import { ConnectScreen } from "./src/screens/ConnectScreen";
 import { ConversationListScreen } from "./src/screens/ConversationListScreen";
-import { colors, TABLET_MIN_WIDTH } from "./src/theme";
+import { MobileShell } from "./src/screens/mobile-shell";
+import { applyWebTheme, colors, layout, TABLET_MIN_WIDTH } from "./src/theme";
 
 function Shell() {
-  const { route, openList } = useAppState();
+  const { route } = useAppState();
   const { width } = useWindowDimensions();
   const isTablet = width >= TABLET_MIN_WIDTH;
 
@@ -45,20 +46,14 @@ function Shell() {
     );
   }
 
-  if (route.name === "chat") {
-    return (
-      <ChatScreen
-        key={route.conversation.id}
-        conversation={route.conversation}
-        onBack={openList}
-      />
-    );
-  }
-
-  return <ConversationListScreen />;
+  return <MobileShell />;
 }
 
 export default function App() {
+  React.useEffect(() => {
+    applyWebTheme();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <AppStateProvider>
@@ -78,10 +73,11 @@ const styles = StyleSheet.create({
   },
   split: { flex: 1, flexDirection: "row", backgroundColor: colors.bg },
   paneList: {
-    width: 360,
+    width: layout.sidebarWidth,
     maxWidth: "42%",
     borderRightColor: colors.border,
     borderRightWidth: 1,
+    backgroundColor: colors.bg,
   },
   paneChat: { flex: 1 },
 });

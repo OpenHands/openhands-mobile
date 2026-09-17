@@ -13,7 +13,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AgentServerError, assertCompatibleServer } from "../api/agent-server";
 import { useAppState } from "../context/app-state";
 import { saveConnection } from "../storage/connection-store";
-import { colors, radius, space } from "../theme";
+import { colors, radius, space, textBase } from "../theme";
+import { isPressHot, pressWebProps } from "../ui/press-style";
 
 export function ConnectScreen() {
   const { setConnection } = useAppState();
@@ -103,16 +104,17 @@ export function ConnectScreen() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <Pressable
+            {...pressWebProps("accent")}
             onPress={() => void onConnect()}
             disabled={busy}
-            style={({ pressed }) => [
+            style={(state) => [
               styles.button,
-              pressed && styles.buttonPressed,
+              !busy && isPressHot(state) && styles.buttonHot,
               busy && styles.buttonDisabled,
             ]}
           >
             {busy ? (
-              <ActivityIndicator color={colors.text} />
+              <ActivityIndicator color={colors.accentForeground} />
             ) : (
               <Text style={styles.buttonText}>Connect</Text>
             )}
@@ -127,11 +129,24 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   body: { flex: 1, padding: space.lg, gap: space.sm },
-  kicker: { color: colors.accent, fontSize: 13, fontWeight: "600" },
-  title: { color: colors.text, fontSize: 28, fontWeight: "700", lineHeight: 34 },
-  copy: { color: colors.muted, fontSize: 15, lineHeight: 22, marginBottom: space.sm },
-  label: { color: colors.muted, fontSize: 13, marginTop: space.xs },
+  kicker: { ...textBase, color: colors.accent, fontSize: 13, fontWeight: "600" },
+  title: {
+    ...textBase,
+    color: colors.text,
+    fontSize: 28,
+    fontWeight: "600",
+    lineHeight: 34,
+  },
+  copy: {
+    ...textBase,
+    color: colors.muted,
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: space.sm,
+  },
+  label: { ...textBase, color: colors.muted, fontSize: 13, marginTop: space.xs },
   input: {
+    ...textBase,
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderWidth: 1,
@@ -141,7 +156,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
   },
-  error: { color: colors.danger, fontSize: 14, marginTop: space.xs },
+  error: { ...textBase, color: colors.danger, fontSize: 14, marginTop: space.xs },
   button: {
     marginTop: space.md,
     backgroundColor: colors.accent,
@@ -150,7 +165,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  buttonPressed: { opacity: 0.85 },
+  buttonHot: { opacity: 0.85 },
   buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: colors.bg, fontSize: 16, fontWeight: "700" },
+  buttonText: {
+    ...textBase,
+    color: colors.accentForeground,
+    fontSize: 16,
+    fontWeight: "600",
+  },
 });

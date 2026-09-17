@@ -4,69 +4,61 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   AgentServerError,
   eventText,
-  isAssistantMessage,
-  isToolEvent,
   isUserMessage,
   searchEvents,
   sendMessage,
-  toolLabel,
 } from "../api/agent-server";
-import type { AgentEvent } from "../api/types";
+import type { AgentEvent, ConversationSummary } from "../api/types";
+import { mapEventToRows, type ChatRow } from "../chat/map-event";
 import { useAppState } from "../context/app-state";
 import { useConversationSocket } from "../hooks/useConversationSocket";
-import { colors, radius, space } from "../theme";
-import type { ConversationSummary } from "../api/types";
+import { colors, layout, space, textBase, typeScale } from "../theme";
+import { ChatBubble } from "../ui/chat-message";
+import { Composer } from "../ui/composer";
+import { MenuButton } from "../ui/menu-button";
+import { StatusDot } from "../ui/status-dot";
+import { webChatProps, webScrollbarProps } from "../ui/web-scrollbar";
 
 const HISTORY_PAGE_SIZE = 50;
 
-interface ChatRow {
-  id: string;
-  kind: "user" | "assistant" | "tool" | "other";
-  text: string;
-}
-
-function toRow(event: AgentEvent): ChatRow | null {
-  if (event.kind === "ConversationStateUpdateEvent") return null;
-  if (event.kind === "StreamingDeltaEvent") {
-    const text = eventText(event);
-    if (!text) return null;
-    return { id: event.id, kind: "assistant", text };
-  }
-  if (isUserMessage(event)) {
-    const text = eventText(event);
-    return text ? { id: event.id, kind: "user", text } : null;
-  }
-  if (isAssistantMessage(event) && event.kind === "MessageEvent") {
-    const text = eventText(event);
-    return text ? { id: event.id, kind: "assistant", text } : null;
-  }
-  if (isToolEvent(event)) {
-    return { id: event.id, kind: "tool", text: toolLabel(event) };
-  }
-  return null;
-}
-
 function mergeEvents(current: AgentEvent[], incoming: AgentEvent): AgentEvent[] {
   if (current.some((event) => event.id === incoming.id)) return current;
+  if (isUserMessage(incoming)) {
+    const text = eventText(incoming);
+    return [
+      ...current.filter(
+        (event) =>
+          !(event.id.startsWith("local-") && eventText(event) === text),
+      ),
+      incoming,
+    ];
+  }
   return [...current, incoming];
+}
+
+function mergeEventPage(
+  current: AgentEvent[],
+  incoming: AgentEvent[],
+): AgentEvent[] {
+  return incoming.reduce(mergeEvents, current);
 }
 
 export function ChatScreen({
   conversation,
-  onBack,
+  onToggleNav,
+  navOpen = false,
 }: {
   conversation: ConversationSummary;
-  onBack?: () => void;
+  onToggleNav?: () => void;
+  navOpen?: boolean;
 }) {
   const { connection } = useAppState();
   const [events, setEvents] = React.useState<AgentEvent[]>([]);
@@ -119,7 +111,7 @@ export function ChatScreen({
     };
   }, [connection, conversation.id]);
 
-  const socketStatus = useConversationSocket({
+  useConversationSocket({
     host: connection?.host ?? "",
     apiKey: connection?.apiKey ?? "",
     conversationId: conversation.id,
@@ -148,8 +140,7 @@ export function ChatScreen({
         });
         streamBuffer = "";
       }
-      const row = toRow(event);
-      if (row) next.push(row);
+      next.push(...mapEventToRows(event));
     }
     if (streamBuffer) {
       next.push({ id: "stream-live", kind: "assistant", text: streamBuffer });
@@ -157,15 +148,53 @@ export function ChatScreen({
     return next;
   }, [events]);
 
+  const refreshEvents = React.useCallback(async () => {
+    if (!connection) return;
+    const page = await searchEvents(
+      connection.host,
+      connection.apiKey,
+      conversation.id,
+      { limit: HISTORY_PAGE_SIZE },
+    );
+    const chronological = [...page.items].reverse();
+    setEvents((current) => mergeEventPage(current, chronological));
+  }, [connection, conversation.id]);
+
   const onSend = async () => {
     if (!connection || !draft.trim() || sending) return;
     const text = draft.trim();
+    const optimisticId = `local-${Date.now()}`;
     setDraft("");
     setSending(true);
     setError(null);
+    setEvents((current) => [
+      ...current,
+      {
+        id: optimisticId,
+        timestamp: new Date().toISOString(),
+        source: "user",
+        kind: "MessageEvent",
+        llm_message: { role: "user", content: [{ type: "text", text }] },
+      },
+    ]);
     try {
       await sendMessage(connection.host, connection.apiKey, conversation.id, text);
+      void (async () => {
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+          await new Promise((resolve) => {
+            setTimeout(resolve, 1500);
+          });
+          try {
+            await refreshEvents();
+          } catch {
+            // Live updates still come from the socket when polling fails.
+          }
+        }
+      })();
     } catch (caught) {
+      setEvents((current) =>
+        current.filter((event) => event.id !== optimisticId),
+      );
       setDraft(text);
       setError(
         caught instanceof AgentServerError
@@ -178,29 +207,19 @@ export function ChatScreen({
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+    <SafeAreaView style={styles.safe} edges={["top", "bottom"]} {...webChatProps}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View style={styles.header}>
-          {onBack ? (
-            <Pressable onPress={onBack} style={styles.back}>
-              <Text style={styles.backText}>Back</Text>
-            </Pressable>
-          ) : (
-            <View style={styles.back} />
-          )}
-          <View style={styles.headerCenter}>
+          {onToggleNav ? (
+            <MenuButton open={navOpen} onPress={onToggleNav} />
+          ) : null}
+          <View style={styles.headerCopy}>
+            <StatusDot status={conversation.executionStatus} />
             <Text style={styles.title} numberOfLines={1}>
               {conversation.title}
-            </Text>
-            <Text style={styles.status}>
-              {socketStatus === "live"
-                ? "Live"
-                : socketStatus === "connecting"
-                  ? "Connecting…"
-                  : "Offline — is the laptop awake?"}
             </Text>
           </View>
         </View>
@@ -216,6 +235,8 @@ export function ChatScreen({
             ref={listRef}
             data={rows}
             keyExtractor={(item) => item.id}
+            {...webScrollbarProps}
+            style={styles.transcriptScroll}
             contentContainerStyle={styles.transcript}
             onContentSizeChange={() =>
               listRef.current?.scrollToEnd({ animated: true })
@@ -225,50 +246,18 @@ export function ChatScreen({
                 No messages yet. Send one to continue this conversation.
               </Text>
             }
-            renderItem={({ item }) => <Bubble row={item} />}
+            renderItem={({ item }) => <ChatBubble row={item} />}
           />
         )}
 
-        <View style={styles.composer}>
-          <TextInput
-            value={draft}
-            onChangeText={setDraft}
-            placeholder="Message OpenHands"
-            placeholderTextColor={colors.muted}
-            style={styles.input}
-            multiline
-          />
-          <Pressable
-            onPress={() => void onSend()}
-            disabled={sending || !draft.trim()}
-            style={({ pressed }) => [
-              styles.send,
-              pressed && styles.pressed,
-              (sending || !draft.trim()) && styles.disabled,
-            ]}
-          >
-            <Text style={styles.sendText}>Send</Text>
-          </Pressable>
-        </View>
+        <Composer
+          value={draft}
+          onChangeText={setDraft}
+          onSubmit={() => void onSend()}
+          disabled={sending}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
-  );
-}
-
-function Bubble({ row }: { row: ChatRow }) {
-  if (row.kind === "tool") {
-    return (
-      <View style={styles.tool}>
-        <Text style={styles.toolText}>{row.text}</Text>
-      </View>
-    );
-  }
-
-  const isUser = row.kind === "user";
-  return (
-    <View style={[styles.bubble, isUser ? styles.userBubble : styles.agentBubble]}>
-      <Text style={styles.bubbleText}>{row.text}</Text>
-    </View>
   );
 }
 
@@ -276,78 +265,49 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   header: {
+    minHeight: layout.headerRowHeight,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
-    borderBottomColor: colors.border,
-    borderBottomWidth: 1,
-    gap: space.sm,
+    paddingLeft: 10,
+    paddingRight: layout.gutter,
+    gap: space.md,
   },
-  back: { width: 64 },
-  backText: { color: colors.accent, fontSize: 16, fontWeight: "600" },
-  headerCenter: { flex: 1, alignItems: "center" },
-  title: { color: colors.text, fontSize: 16, fontWeight: "700" },
-  status: { color: colors.muted, fontSize: 12, marginTop: 2 },
-  error: { color: colors.danger, paddingHorizontal: space.md, paddingTop: space.sm },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
-  transcript: { padding: space.md, gap: space.sm, paddingBottom: space.lg },
-  empty: { color: colors.muted, textAlign: "center", marginTop: space.lg },
-  bubble: {
-    maxWidth: "86%",
-    borderRadius: radius.lg,
-    paddingHorizontal: space.md,
-    paddingVertical: 10,
-  },
-  userBubble: {
-    alignSelf: "flex-end",
-    backgroundColor: colors.userBubble,
-  },
-  agentBubble: {
-    alignSelf: "flex-start",
-    backgroundColor: colors.agentBubble,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  bubbleText: { color: colors.text, fontSize: 16, lineHeight: 22 },
-  tool: {
-    alignSelf: "center",
-    backgroundColor: colors.tool,
-    borderRadius: 999,
-    paddingHorizontal: space.sm,
-    paddingVertical: 4,
-  },
-  toolText: { color: colors.muted, fontSize: 12 },
-  composer: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: space.sm,
-    padding: space.md,
-    borderTopColor: colors.border,
-    borderTopWidth: 1,
-  },
-  input: {
+  headerCopy: {
     flex: 1,
-    minHeight: 44,
-    maxHeight: 140,
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    color: colors.text,
-    paddingHorizontal: space.md,
-    paddingVertical: 10,
-    fontSize: 16,
-  },
-  send: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.md,
-    minHeight: 44,
-    paddingHorizontal: space.md,
+    minWidth: 0,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    gap: 6,
   },
-  sendText: { color: colors.bg, fontWeight: "700" },
-  pressed: { opacity: 0.85 },
-  disabled: { opacity: 0.45 },
+  title: {
+    ...textBase,
+    flex: 1,
+    minWidth: 0,
+    color: colors.text,
+    fontSize: typeScale.title,
+    lineHeight: 22,
+    fontWeight: "600",
+  },
+  error: {
+    ...textBase,
+    color: colors.danger,
+    paddingHorizontal: layout.gutter,
+    paddingTop: space.sm,
+    fontSize: typeScale.meta,
+  },
+  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
+  transcriptScroll: { flex: 1, minHeight: 0 },
+  transcript: {
+    paddingHorizontal: layout.gutter,
+    paddingTop: space.lg,
+    paddingBottom: 40,
+  },
+  empty: {
+    ...textBase,
+    color: colors.muted,
+    textAlign: "center",
+    marginTop: space.xxl,
+    fontSize: typeScale.title,
+    lineHeight: 24,
+  },
 });

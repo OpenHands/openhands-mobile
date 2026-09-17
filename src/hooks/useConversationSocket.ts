@@ -1,7 +1,7 @@
 import React from "react";
 import {
   buildEventsSocketUrl,
-  isAgentEvent,
+  parseSocketEvent,
   sendSocketAuth,
 } from "../api/agent-server";
 import type { AgentEvent } from "../api/types";
@@ -56,7 +56,8 @@ export function useConversationSocket({
       socket.onmessage = (message) => {
         try {
           const parsed: unknown = JSON.parse(String(message.data));
-          if (isAgentEvent(parsed)) onEventRef.current(parsed);
+          const event = parseSocketEvent(parsed);
+          if (event) onEventRef.current(event);
         } catch {
           // Ignore non-JSON frames (heartbeats, auth acks).
         }
